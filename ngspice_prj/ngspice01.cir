@@ -1,0 +1,30 @@
+.title DAC_TestBench
+.subckt BITLOGIC bx bxl vdd vss
+Rtop vdd trip 100000000.0
+Rbot trip vss 100000000.0
+Stop bx trip vdd bxl swmod
+Sbot trip bx bxl vss swmod
+.model swmod sw (roff=1000000.0 ron=0.1)
+.ends BITLOGIC
+
+.subckt IDEALDAC refp refn vdd vss b0 b1 b2 b3 out
+XBL0 b0 b0l vdd vss BITLOGIC
+XBL1 b1 b1l vdd vss BITLOGIC
+XBL2 b2 b2l vdd vss BITLOGIC
+XBL3 b3 b3l vdd vss BITLOGIC
+Bout out vss v=(v(refp)-v(refn))/16*(v(b0l)*1+v(b1l)*2+v(b2l)*4+v(b3l)*8+0)+v(refn)
+.ends IDEALDAC
+XDAC1 vrefp vrefn vdd vss b0,b1,b2,b3 out IDEALDAC
+Vvdd vdd 0 1
+Vvss vss 0 0
+Vrefp vrefp 0 1
+Vrefn vrefn 0 0
+Vb0 b0 0 1
+Vb1 b1 0 1
+Vb2 b2 0 1
+Vb3 b3 0 1
+.options TEMP = 25C
+.options TNOM = 25C
+.ic 
+.op 
+.end

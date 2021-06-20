@@ -1,0 +1,174 @@
+Differential amplifier
+
+.lib 'cmos180n.lib' tm
+
+.param vdd=1.8
+.param vagnd=0.9
+.param ibias=5u
+.param rload=100k
+.param cload=1p
+.param vagdcm_ac=1
+.param vsp_ac=0
+.param vsn_ac=0
+.param acin=1
+.param acvdd=0
+
+vdd (vdd 0) dc={vdd}
+vagnd (agnd 0) dc={vagnd}
+vcm (inp agnd) dc=0
+vin (inn_ext inp) dc=0 acmag=1 pulse=(0.5 -0.5 0.1u 0.1u 0.1u 2u)
+rin (inn_ext inn) r=1meg
+rfb (inn out) r=1meg
+rload (out 0) r={rload}
+cload (out 0) c={cload}
+ibias (bn 0) dc={ibias}
+xamp (inp inn out vdd 0 0 bn) amp
+.endn
+
+* subcircuits
+*
+.subckt amp inp inn out vdd vss pd w_12
+xm2 (w_12 w_12 vdd vdd) submodp w=7.14u l=0.44u m=1
+xm8 (a2 w_12 vdd vdd)   submodp w=7.14u l=0.44u m=8
+xm11 (out w_12 vdd vdd) submodp w=7.14u l=0.44u m=8
+
+xm3 (w_12 w_6 vdd vdd)  submodp w=0.5um l=0.18u
+xm4 (a6 pd vss vss)     submodn w=0.5um l=0.18u
+
+xm6 (a5 inn a2 vdd)     submodp w=4.5u l=0.51u m=4
+xm7 (a6 inp a2 vdd)     submodp w=4.5u l=0.51u m=4
+
+xm9 (a5 a5 vss vss)     submodn w=1.53u l=1.18u m=4
+xm10 (a6 a5 vss vss)    submodn w=1.53u l=1.18u m=4
+
+xm5 (out a6 vss vss)    submodn w=13.5u l=0.77u m=4
+
+xs1 (pd w_6 vdd vss) tinv
+
+c1 (a6 w_7) c=6.6p
+r1 (out w_7) r=750
+.ends
+
+.subckt tinv in out vdd vss
+xm1 (out in vdd vdd) submodp param: w=0.5u l=0.18u
+xm2 (out in vss vss) submodn param: w=0.5u l=0.18u
+.ends
+
+.subckt submodn drain gate source bulk param: w l m=1
+m0 (drain gate source bulk) nmosmod w={w} l={l} m={m} ad={w*0.18u} as={w*0.18u} pd={2*(w+0.18u)} ps={2*(w+0.18u)} nrs={0.18u/w} nrd={0.18u/w}
+.ends
+
+.subckt submodp drain gate source bulk param: w l m=1
+m0 (drain gate source bulk) pmosmod w={w} l={l} m={m} ad={w*0.18u} as={w*0.18u} pd={2*(w+0.18u)} ps={2*(w+0.18u)} nrs={0.18u/w} nrd={0.18u/w}
+.ends
+
+
+.options method=gear
+
+.control
+destroy all
+
+unset plotwininfo
+set plotwinwidth=300
+set plotwinheight=300
+
+echo Operating point
+op
+let isup=-i(vdd)
+print isup
+echo
+
+echo DC sweep
+dc vin -2 2 lin 400
+plot v(out,agnd) vs v(inp,inn) xl -20m 20m xlabel "V(+,-) [V]" ylabel "Vout [V]"
+let c=0
+cursor c right v(out,agnd) 0
+let inoffs=v(inp,inn)[%c]
+print inoffs
+echo
+
+echo AC response
+set units=degrees
+let @vdd[acmag]=0
+let @vin[acmag]=1
+ac dec 50 1 100meg
+let h=v(out,agnd)/v(inp,inn)
+plot db(h) unwrap(phase(h)) xlabel "f [Hz]" ylabel "mag [dB], phase [deg]"
+let acgain=max(db(h))
+let c=0
+cursor c right db(h) 0
+let pm=unwrap(phase(h))[%c]+180
+let ugbw=abs(frequency[%c])
+print acgain pm ugbw
+nameplot acres
+echo
+
+echo PSRR
+let @vdd[acmag]=1
+let @vin[acmag]=0
+let @rfb[r]=10meg
+ac dec 50 1 1g
+let @rfb[r]=1meg
+let h=v(vdd)/v(out,agnd)
+plot db(h) xlabel "f [Hz]" ylabel "PSRR (Vdd/Vout) [dB]"
+let psrr0=db(h)[0]
+print psrr0
+echo
+
+echo Noise
+noise v(out,agnd) vin dec 10 1 1g 1
+setplot previous
+let ns=onoise_spectrum-onoise_rfb-onoise_rin-onoise_rload
+let nsin=ns/abs(acres.h)^2
+plot ns   ylog xlabel "f [Hz]" ylabel "Output noise at Vout [V^2/Hz]"
+plot nsin ylog xlabel "f [Hz]" ylabel "Equiv. input noise at V(+,-) [V^2/Hz]"
+let c=0
+cursor c right frequency 100
+let inoise100=nsin[%c]
+cursor c right frequency 100k
+let inoise100k=nsin[%c]
+print inoise100 inoise100k
+setplot next
+echo
+
+echo Pulse response
+tran 0.01u 5u
+plot v(out) v(inp,inn_ext)+3 xlabel "t [s]" ylabel "Vin+3, Vout [V]"
+let c1=0
+cursor c1 right time 0.1u
+let out1=v(out)[%c1]
+cursor c1 right time 2.1u
+let out2=v(out)[%c1]
+let out10=out1+(out2-out1)/10
+let out90=out2-(out2-out1)/10
+let c1=0
+let c2=0
+cursor c1 right v(out) out10 1
+cursor c2 right v(out) out90 1
+let trise=time[%c2]-time[%c1]
+let slewrise=(out90-out10)/trise
+let c3=0
+cursor c3 right time 2.1u
+let aux=abs(v(out)-out2)
+cursor c3 left aux 0.01*(out2-out1) 
+let tsetrise=time[%c3]-0.1u
+let c1=0
+let c2=0
+cursor c1 right v(out) out90 2
+cursor c2 right v(out) out10 2
+let tfall=time[%c2]-time[%c1]
+let slewfall=(out90-out10)/tfall
+let c3=0
+cursor c3 right time
+let aux=abs(v(out)-out1)
+cursor c3 left aux 0.01*(out2-out1) 
+let tsetfall=time[%c3]-2.1u
+let over=(max(v(out))-out2)/(out2-out1)
+let under=(out1-min(v(out)))/(out2-out1)
+print trise tfall slewrise slewfall over under tsetrise tsetfall
+echo
+
+.endc
+
+
+.end
