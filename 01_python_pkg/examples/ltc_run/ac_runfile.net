@@ -1,0 +1,7 @@
+.title test
+Rs outp inp 1k
+CL outp 0 1e-06
+Vsrc inp 0 PULSE(0 1 0 1n 1n 1m 2m) AC 1 0
+.ac dec 21 10 1meg
+.backanno
+.end
